@@ -428,7 +428,7 @@ export async function getDanmakuCacheStats(): Promise<{
         if (cursor) {
           const data = cursor.value as DanmakuCacheData;
           total++;
-          totalSize += data.comments.length;
+          totalSize += new Blob([JSON.stringify(data)]).size;
 
           if (data.timestamp < expireThreshold) {
             expired++;

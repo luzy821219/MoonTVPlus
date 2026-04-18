@@ -34,23 +34,23 @@ import {
   X,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
-import { clearAllDanmakuCache } from '@/lib/danmaku/api';
+import { clearAllDanmakuCache, getDanmakuCacheStats } from '@/lib/danmaku/api';
 import { CURRENT_VERSION } from '@/lib/version';
 import { UpdateStatus } from '@/lib/version_check';
 
+import { DeviceManagementPanel } from './DeviceManagementPanel';
+import { DownloadManagementPanel } from './DownloadManagementPanel';
+import { EmailSettingsPanel } from './EmailSettingsPanel';
 import { FavoritesPanel } from './FavoritesPanel';
 import { NotificationPanel } from './NotificationPanel';
 import { OfflineDownloadPanel } from './OfflineDownloadPanel';
-import { DeviceManagementPanel } from './DeviceManagementPanel';
-import { EmailSettingsPanel } from './EmailSettingsPanel';
 import { PersonalCenterPanel } from './PersonalCenterPanel';
 import { useVersionCheck } from './VersionCheckProvider';
 import { VersionPanel } from './VersionPanel';
-import { DownloadManagementPanel } from './DownloadManagementPanel';
 
 interface AuthInfo {
   username?: string;
@@ -250,6 +250,7 @@ export const UserMenu: React.FC = () => {
   // 清除弹幕缓存相关状态
   const [isClearingCache, setIsClearingCache] = useState(false);
   const [clearCacheMessage, setClearCacheMessage] = useState<string | null>(null);
+  const [danmakuCacheUsage, setDanmakuCacheUsage] = useState('计算中...');
 
   // 确保组件已挂载
   useEffect(() => {
@@ -273,6 +274,22 @@ export const UserMenu: React.FC = () => {
       console.error('加载未读通知数量失败:', error);
     }
   };
+
+  const formatCacheSize = useCallback((size: number) => {
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(2)} KB`;
+    return `${(size / 1024 / 1024).toFixed(2)} MB`;
+  }, []);
+
+  const loadDanmakuCacheUsage = useCallback(async () => {
+    try {
+      const stats = await getDanmakuCacheStats();
+      setDanmakuCacheUsage(formatCacheSize(stats.totalSize));
+    } catch (error) {
+      console.error('获取弹幕缓存占用失败:', error);
+      setDanmakuCacheUsage('获取失败');
+    }
+  }, [formatCacheSize]);
 
   // 首次加载时检查未读通知数量（使用全局标记避免多个实例重复请求）
   useEffect(() => {
@@ -303,6 +320,13 @@ export const UserMenu: React.FC = () => {
       globalWindow.__loadingNotifications = false;
     });
   }, []);
+
+  useEffect(() => {
+    if (!mounted || !isSettingsOpen || !isDanmakuSectionOpen) return;
+    void (async () => {
+      await loadDanmakuCacheUsage();
+    })();
+  }, [loadDanmakuCacheUsage, mounted, isSettingsOpen, isDanmakuSectionOpen]);
 
   // 监听通知更新事件
   useEffect(() => {
@@ -1398,6 +1422,7 @@ export const UserMenu: React.FC = () => {
     try {
       await clearAllDanmakuCache();
       setClearCacheMessage('弹幕缓存已清除成功！');
+      setDanmakuCacheUsage('0 B');
       console.log('弹幕缓存已清除');
 
       // 3秒后自动清除提示
@@ -2856,6 +2881,9 @@ export const UserMenu: React.FC = () => {
                       <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
                         弹幕缓存管理
                       </h4>
+                      <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                        弹幕缓存空间占用：{danmakuCacheUsage}
+                      </p>
                       <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
                         清除所有已缓存的弹幕数据
                       </p>
